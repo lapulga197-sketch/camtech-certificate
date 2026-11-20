@@ -1,0 +1,257 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  color-scheme: light;
+  --font-khmer: "Kantumruy Pro", "Noto Sans Khmer", "Khmer OS Battambang", "Khmer OS", system-ui, sans-serif;
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --success: oklch(0.6 0.15 145);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.75 0.15 75);
+  --warning-foreground: oklch(0.145 0 0);
+}
+
+.dark {
+  /* Tells the browser to render its own native UI (select dropdown popups,
+     scrollbars, date pickers, etc.) using a dark palette — without this,
+     native <select> options lists render with a white background from the
+     OS/browser regardless of our custom CSS, clashing badly with dark mode. */
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  --success: oklch(0.65 0.15 145);
+  --success-foreground: oklch(0.145 0 0);
+  --warning: oklch(0.75 0.15 75);
+  --warning-foreground: oklch(0.145 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-khmer);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+html {
+  /* Khmer glyphs read visually smaller than Latin at the same font-size, so the
+     whole app's rem-based type scale (Tailwind text-sm, text-xl, etc.) is bumped
+     up from the 16px browser default for better readability. */
+  font-size: 18.5px;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-khmer);
+}
+
+* {
+  border-color: var(--border);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--muted-foreground);
+  opacity: 0.3;
+  border-radius: 8px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* ===== Animated gradient border (login page) ===== */
+@keyframes spin-gradient {
+  to {
+    transform: rotate(1turn);
+  }
+}
+.gradient-border-wrap {
+  position: relative;
+  padding: 2px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  isolation: isolate;
+}
+.gradient-border-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -60%;
+  z-index: 0;
+  background: conic-gradient(
+    from 0deg,
+    oklch(0.6 0.22 280),
+    oklch(0.62 0.25 330),
+    oklch(0.68 0.2 40),
+    oklch(0.6 0.18 200),
+    oklch(0.6 0.22 280)
+  );
+  animation: spin-gradient 6s linear infinite;
+}
+.gradient-border-inner {
+  position: relative;
+  z-index: 1;
+  border-radius: calc(var(--radius-xl) - 2px);
+  background: var(--card);
+  height: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gradient-border-wrap::before {
+    animation: none;
+  }
+}
+
+/* ===== Accent color presets (Settings > Appearance) ===== */
+/* Applied as a class on <html> alongside the existing light/.dark theme;
+   only --primary/--ring (and matching foreground) are overridden so both
+   light and dark mode keep working correctly with any accent chosen. */
+.accent-blue {
+  --primary: oklch(0.55 0.2 255);
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.55 0.2 255);
+}
+.accent-green {
+  --primary: oklch(0.55 0.16 150);
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.55 0.16 150);
+}
+.accent-purple {
+  --primary: oklch(0.5 0.22 300);
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.5 0.22 300);
+}
+.accent-rose {
+  --primary: oklch(0.55 0.22 15);
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.55 0.22 15);
+}
+.accent-amber {
+  --primary: oklch(0.65 0.18 75);
+  --primary-foreground: oklch(0.145 0 0);
+  --ring: oklch(0.65 0.18 75);
+}
+
+/* Gradient accent presets — applied only to "default"-variant buttons/badges
+   (via data-variant, set by the Button/Badge components) so outline/ghost/
+   destructive variants are never affected. */
+.accent-gradient-sunset [data-slot="button"][data-variant="default"],
+.accent-gradient-sunset [data-slot="badge"][data-variant="default"] {
+  background-image: linear-gradient(135deg, oklch(0.65 0.22 30), oklch(0.6 0.24 350));
+  background-color: transparent;
+  border-color: transparent;
+  color: white;
+}
+.accent-gradient-ocean [data-slot="button"][data-variant="default"],
+.accent-gradient-ocean [data-slot="badge"][data-variant="default"] {
+  background-image: linear-gradient(135deg, oklch(0.6 0.2 250), oklch(0.65 0.16 195));
+  background-color: transparent;
+  border-color: transparent;
+  color: white;
+}
+.accent-gradient-forest [data-slot="button"][data-variant="default"],
+.accent-gradient-forest [data-slot="badge"][data-variant="default"] {
+  background-image: linear-gradient(135deg, oklch(0.55 0.18 150), oklch(0.7 0.19 110));
+  background-color: transparent;
+  border-color: transparent;
+  color: white;
+}
