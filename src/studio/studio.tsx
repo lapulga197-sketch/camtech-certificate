@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CertificateCanvas } from "@/components/certificates/certificate-canvas";
 import {
-  pageSizeMm, pageSizePx, parseDesign, type CertDesign, type DesignElement, type DocType, type Org, type Recipient,
+  pageSizeMm, pageSizePx, parseDesign, type CertDesign, type DesignElement, type DocType, type Org, type PhotoCrop, type Recipient,
 } from "@/lib/certificate-design";
+import { resolveCrop } from "@/lib/photo-frames";
 import { DOC_TYPES } from "@/lib/doc-types";
 import { newDesignFor } from "@/lib/new-design";
 import { todayInPhnomPenh } from "@/lib/timezone";
@@ -52,6 +53,8 @@ export function DocStudio({
   const [recipients, setRecipientsState] = useState<Recipient[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [cropId, setCropId] = useState<string | null>(null);
+  const [cropAll, setCropAll] = useState(false);
   const [tab, setTab] = useState("recipients");
   const [templates, setTemplates] = useState<TemplateRow[]>(initialTemplates);
   const [zoom, setZoom] = useState(1);
@@ -246,6 +249,57 @@ export function DocStudio({
     window.addEventListener("pointerup", up);
   }
 
+  // ---------- photo crop (Fill / Fit, zoom, drag to reposition) ----------
+
+  const perPerson = recipients.length > 1 && !cropAll;
+
+  function applyCrop(elId: string, patch: Partial<PhotoCrop>, silent = false) {
+    if (perPerson && current) {
+      setRecipients((prev) => prev.map((r) => (r.id === current.id ? { ...r, photoCrop: { ...r.photoCrop, ...patch } } : r)));
+      return;
+    }
+    if (silent) patchSilently(elId, patch);
+    else setDesign((d) => ({ ...d, elements: d.elements.map((e) => (e.id === elId ? { ...e, ...patch } : e)) }), `crop-${elId}`);
+    if (recipients.some((r) => r.photoCrop)) setRecipients((prev) => prev.map((r) => (r.photoCrop ? { ...r, photoCrop: undefined } : r)));
+  }
+
+  function resetCrop(elId: string) {
+    if (perPerson && current) {
+      setRecipients((prev) => prev.map((r) => (r.id === current.id ? { ...r, photoCrop: undefined } : r)));
+      return;
+    }
+    setDesign((d) => ({ ...d, elements: d.elements.map((e) => (e.id === elId ? { ...e, zoom: 1, px: 50, py: 0 } : e)) }));
+  }
+
+  function onCropPointerDown(e: React.PointerEvent<HTMLDivElement>, el: DesignElement) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedId(el.id);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const start = resolveCrop(el, current);
+    const sx = e.clientX, sy = e.clientY;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const dx = ((ev.clientX - sx) / Math.max(20, rect.width)) * 100;
+      const dy = ((ev.clientY - sy) / Math.max(20, rect.height)) * 100;
+      if (!moved && Math.abs(dx) + Math.abs(dy) < 0.5) return;
+      if (!moved) {
+        moved = true;
+        if (!(perPerson && current)) pushUndoOnce();
+      }
+      const k = 1.6 / start.zoom;
+      const clamp = (v: number) => Math.round(Math.max(0, Math.min(100, v)) * 10) / 10;
+      applyCrop(el.id, { px: clamp(start.px - dx * k), py: clamp(start.py - dy * k) }, true);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
   // ---------- exports ----------
 
   const exportList: (Recipient | null)[] = recipients.length > 0 ? recipients : [null];
@@ -352,9 +406,9 @@ export function DocStudio({
   }
 
   const editorHooks = useMemo(
-    () => ({ selectedId, guides, onElementPointerDown, onResizePointerDown }),
+    () => ({ selectedId, guides, cropId: cropId === selectedId ? cropId : null, onCropPointerDown, onElementPointerDown, onResizePointerDown }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedId, guides, scale, pw, ph]
+    [selectedId, guides, scale, pw, ph, cropId, perPerson, current]
   );
 
   const previewRecipient = current ?? SAMPLE;
@@ -392,7 +446,18 @@ export function DocStudio({
               />
             </TabsContent>
             <TabsContent value="elements" className="mt-4">
-              <ElementPanel design={design} setDesign={setDesign} selectedId={selectedId} onSelect={setSelectedId} />
+              <ElementPanel
+                design={design} setDesign={setDesign} selectedId={selectedId} onSelect={setSelectedId}
+                photo={{
+                  hasPhoto: !!current?.photo,
+                  cropping: cropId !== null && cropId === selectedId,
+                  toggleCrop: (id) => setCropId((c) => (c === id ? null : id)),
+                  value: (el) => resolveCrop(el, current),
+                  apply: applyCrop,
+                  reset: resetCrop,
+                  perPerson, canScope: recipients.length > 1, cropAll, setCropAll,
+                }}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>

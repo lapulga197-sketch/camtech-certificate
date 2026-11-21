@@ -7,7 +7,7 @@ import { parseRecipientWorkbook } from "@/lib/certificate-sheet";
 import { DOC_TYPES } from "@/lib/doc-types";
 import { allow } from "@/lib/security";
 import { logActivity, type Action } from "@/lib/activity";
-import type { DocType, Recipient } from "@/lib/certificate-design";
+import type { DocType, PhotoFrameRef, Recipient } from "@/lib/certificate-design";
 
 async function guard() {
   return currentUser();
@@ -202,6 +202,20 @@ export async function listFrames(doc: DocType, orientation: "landscape" | "portr
     if (docs.length > 0 && !docs.includes(doc)) continue;
     if (m.orientation && m.orientation !== "both" && m.orientation !== orientation) continue;
     out.push({ id: r.id, title: m.title || "ស៊ុម" });
+  }
+  return out;
+}
+
+/** Admin-uploaded photo frames (a transparent image with a hole for the photo). */
+export async function listPhotoFrames(): Promise<PhotoFrameRef[]> {
+  if (!(await guard())) return [];
+  const rows = await query<{ id: string; meta: string | null }>("SELECT id, meta FROM asset WHERE kind = 'pframe' ORDER BY sort_order, created_at LIMIT 200");
+  const out: PhotoFrameRef[] = [];
+  for (const r of rows) {
+    let m: { title?: string; ar?: number; hole?: number[]; shape?: string } = {};
+    try { m = JSON.parse(r.meta || "{}"); } catch { /* ignore */ }
+    const h = Array.isArray(m.hole) && m.hole.length === 4 ? (m.hole.map((x) => Number(x) || 0) as [number, number, number, number]) : ([14, 14, 14, 14] as [number, number, number, number]);
+    out.push({ id: r.id, title: m.title || "ស៊ុមរូបថត", ar: Number(m.ar) || 0.8, hole: h, shape: m.shape === "oval" || m.shape === "rounded" ? m.shape : "rect" });
   }
   return out;
 }

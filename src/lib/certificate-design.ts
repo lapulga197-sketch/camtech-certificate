@@ -161,7 +161,23 @@ export function getTheme(id: string): Theme {
 // ---------------------------------------------------------------------------
 
 export type ElementType = "text" | "image" | "photo" | "qr" | "line";
-export type ImageShape = "rect" | "rounded" | "circle";
+export type ImageShape = "rect" | "rounded" | "circle" | "oval";
+
+/** How a photo sits in its window: fill = cover (cropped), fit = whole photo visible. */
+export type PhotoCrop = { fit: "fill" | "fit"; zoom: number; px: number; py: number };
+
+/**
+ * Decorative photo frame: a built-in ring (id "b:…") or an admin-uploaded transparent
+ * PNG / SVG whose see-through hole (percent from each edge) is where the photo shows.
+ */
+export type PhotoFrameRef = {
+  id: string;
+  title: string;
+  /** Uploaded frames only: width / height of the frame image, hole [left, top, right, bottom] in %, hole shape. */
+  ar?: number;
+  hole?: [number, number, number, number];
+  shape?: "rect" | "rounded" | "oval";
+};
 
 export type DesignElement = {
   id: string;
@@ -196,6 +212,13 @@ export type DesignElement = {
   opacity?: number; // 0..1
   rotate?: number; // deg
   shape?: ImageShape;
+  /** Photo only: Fill / Fit, zoom (1–4) and focus point (% across / down) of the cropped photo. */
+  fit?: "fill" | "fit";
+  zoom?: number;
+  px?: number;
+  py?: number;
+  fitBg?: string;
+  pframe?: PhotoFrameRef;
   borderColor?: string;
   borderWidth?: number; // px
   thickness?: number; // px, for line
@@ -265,6 +288,8 @@ export type Recipient = {
   certNo?: string;
   qr?: string;
   photo?: string;
+  /** This person's own crop of the photo (overrides the element default). */
+  photoCrop?: Partial<PhotoCrop>;
   /** Job title / student status (card, letters). */
   position?: string;
   positionEn?: string;

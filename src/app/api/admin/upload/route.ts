@@ -43,6 +43,18 @@ export async function POST(req: Request) {
     meta.docs = docs;
     meta.orientation = ["landscape", "portrait", "both"].includes(orient) ? orient : "both";
   }
+  if (kind === "pframe") {
+    const num = (v: unknown, lo: number, hi: number, d: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
+    };
+    const h = clean(fd.get("hole"), 60).split(",").map((x) => num(x, 0, 45, 14));
+    const shape = clean(fd.get("shape"), 10);
+    meta.title = clean(fd.get("title"), 80) || file.name.replace(/\.[^.]+$/, "").slice(0, 80);
+    meta.ar = Math.round(num(fd.get("ar"), 0.2, 5, 0.8) * 1000) / 1000;
+    meta.hole = [h[0] ?? 14, h[1] ?? 14, h[2] ?? 14, h[3] ?? 14];
+    meta.shape = ["rect", "rounded", "oval"].includes(shape) ? shape : "rect";
+  }
   if (kind === "help") {
     meta.title = clean(fd.get("title"), 120) || file.name.replace(/\.[^.]+$/, "").slice(0, 120);
     meta.doc = clean(fd.get("doc"), 40).replace(/[^a-z_-]/g, "") || "general";

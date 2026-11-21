@@ -158,7 +158,7 @@ export const DOC_TYPES: Record<DocType, DocConfig> = {
     defaultFields: ["occasion", "message", "date", "occasionEn", "messageEn"],
     rowFields: ["occasion", "message", "date", "position", "nameEn", "occasionEn", "messageEn", "certNo"],
     pasteCols: ["occasion", "message"],
-    photo: false, register: false, sheet: false,
+    photo: true, register: false, sheet: false,
     noLabel: "លេខលិខិត", fileBase: "greetings",
     datalist: {
       field: "occasion",

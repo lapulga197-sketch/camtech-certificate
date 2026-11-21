@@ -1,6 +1,6 @@
 import "server-only";
 
-export type AssetKind = "favicon" | "icon" | "logo" | "welcome" | "about" | "frame" | "help";
+export type AssetKind = "favicon" | "icon" | "logo" | "welcome" | "about" | "frame" | "pframe" | "help";
 
 export const MAX_UPLOAD = 4 * 1024 * 1024; // Vercel functions accept ~4.5 MB request bodies
 
@@ -12,6 +12,7 @@ export const ALLOWED: Record<AssetKind, string[]> = {
   welcome: [...IMG, "image/gif"],
   about: IMG,
   frame: IMG,
+  pframe: IMG,
   help: ["application/pdf"],
 };
 

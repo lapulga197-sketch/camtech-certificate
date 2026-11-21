@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlignCenter, AlignLeft, AlignRight, Bold, ChevronDown, ChevronUp, Copy, Image as ImageIcon, Italic, Minus,
-  QrCode, Trash2, Type, UserSquare2,
+  Crop, QrCode, RotateCcw, Trash2, Type, UserSquare2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { FONTS, variablesFor, newId, type CertDesign, type DesignElement, type ImageShape } from "@/lib/certificate-design";
+import { FONTS, variablesFor, newId, type CertDesign, type DesignElement, type ImageShape, type PhotoCrop, type PhotoFrameRef } from "@/lib/certificate-design";
+import { BUILTIN_RINGS } from "@/lib/photo-frames";
+import { listPhotoFrames } from "./actions";
 import { fileToDataUrl } from "./image-utils";
 import { DEFAULT_FX, FX_PRESETS, textFxStyle, type FxPreset, type TextFx } from "@/lib/text-effects";
 
@@ -52,14 +54,38 @@ function ElementIcon({ type }: { type: DesignElement["type"] }) {
   return <Minus className={cls} />;
 }
 
+export type PhotoCtl = {
+  hasPhoto: boolean;
+  cropping: boolean;
+  toggleCrop: (id: string) => void;
+  value: (el: DesignElement) => PhotoCrop;
+  apply: (id: string, patch: Partial<PhotoCrop>) => void;
+  reset: (id: string) => void;
+  /** Edits apply to the person shown (true) or to everybody (false). */
+  perPerson: boolean;
+  canScope: boolean;
+  cropAll: boolean;
+  setCropAll: (v: boolean) => void;
+};
+
 export function ElementPanel({
-  design, setDesign, selectedId, onSelect,
+  design, setDesign, selectedId, onSelect, photo,
 }: {
   design: CertDesign;
   setDesign: SetDesign;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  photo: PhotoCtl;
 }) {
+  const [uploadedFrames, setUploadedFrames] = useState<PhotoFrameRef[]>([]);
+  const wantsFrames = design.elements.find((e) => e.id === selectedId)?.type === "photo";
+  useEffect(() => {
+    if (!wantsFrames) return;
+    let alive = true;
+    void listPhotoFrames().then((f) => alive && setUploadedFrames(f)).catch(() => undefined);
+    return () => { alive = false; };
+  }, [wantsFrames]);
+
   const imgInput = useRef<HTMLInputElement>(null);
   const replaceInput = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -142,7 +168,9 @@ export function ElementPanel({
             <ImageIcon className="size-4" /> រូបភាព / Logo / ហត្ថលេខា
           </Button>
           <Button type="button" variant="outline" size="sm" data-testid="add-photo"
-            onClick={() => add({ id: newId("p"), type: "photo", x: 8, y: 40, w: 12, ar: 0.75, shape: "rect", borderColor: "#b8860b", borderWidth: 3 })}>
+            onClick={() => add(design.doc === "greeting"
+              ? { id: newId("p"), type: "photo", ...(design.orientation === "portrait" ? { x: 33, y: 30, w: 34 } : { x: 76, y: 24, w: 17 }), ar: 0.8, shape: "oval", pframe: { id: "b:gold", title: "មាសរលោង" }, fit: "fill", zoom: 1, px: 50, py: 10 }
+              : { id: newId("p"), type: "photo", x: 8, y: 40, w: 12, ar: 0.75, shape: "rect", borderColor: "#b8860b", borderWidth: 3, fit: "fill", zoom: 1, px: 50, py: 0 })}>
             <UserSquare2 className="size-4" /> រូបថតអ្នកទទួល
           </Button>
           <Button type="button" variant="outline" size="sm"
@@ -284,6 +312,7 @@ export function ElementPanel({
                   <ImageIcon className="size-4" /> ប្តូររូបភាព
                 </Button>
               )}
+              {!(selected.type === "photo" && selected.pframe && !selected.pframe.id.startsWith("b:")) && (
               <div className="space-y-1">
                 <Label className="text-xs">ទម្រង់</Label>
                 <Select value={selected.shape ?? "rect"} onValueChange={(v) => update(selected.id, { shape: v as ImageShape })}>
@@ -291,17 +320,99 @@ export function ElementPanel({
                   <SelectContent>
                     <SelectItem value="rect">ចតុកោណកែង</SelectItem>
                     <SelectItem value="rounded">ជ្រុងមូល</SelectItem>
+                    <SelectItem value="oval">អូវ៉ាល់</SelectItem>
                     <SelectItem value="circle">រង្វង់</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {selected.type === "photo" && (
-                <Range label="សមាមាត្រ (ទទឹង/កម្ពស់)" value={selected.ar ?? 0.75} min={0.5} max={1.5} step={0.05} onChange={(v) => update(selected.id, { ar: v }, "ar")} />
               )}
-              <div className="flex items-center gap-2">
-                <input type="color" value={selected.borderColor ?? "#000000"} onChange={(e) => update(selected.id, { borderColor: e.target.value }, "bcolor")} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5" />
-                <div className="flex-1"><Range label="កម្រាស់ស៊ុម" value={selected.borderWidth ?? 0} min={0} max={12} onChange={(v) => update(selected.id, { borderWidth: v }, "bwidth")} suffix=" px" /></div>
-              </div>
+              {selected.type === "photo" && (() => {
+                const el = selected;
+                const pf = el.pframe;
+                const uploaded = !!pf && !pf.id.startsWith("b:");
+                const crop = photo.value(el);
+                const pick = (f: PhotoFrameRef | null) => {
+                  if (!f) return update(el.id, { pframe: undefined });
+                  if (f.id.startsWith("b:")) return update(el.id, { pframe: f });
+                  update(el.id, { pframe: f, ar: f.ar, borderWidth: 0 });
+                };
+                return (
+                  <>
+                    <div className="space-y-1.5 border-t pt-3" data-testid="pframe-section">
+                      <h5 className="text-sm font-semibold">ស៊ុមរូបថត</h5>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        <button type="button" data-testid="pf-none" title="គ្មានស៊ុម" onClick={() => pick(null)}
+                          className={cn("flex h-14 items-center justify-center rounded-md border bg-slate-50 text-[10px] text-slate-600 hover:shadow", !pf && "ring-2 ring-primary")}>គ្មាន</button>
+                        {BUILTIN_RINGS.map((r) => (
+                          <button key={r.id} type="button" data-testid={`pf-${r.id}`} title={r.title} onClick={() => pick({ id: r.id, title: r.title })}
+                            className={cn("flex h-14 items-center justify-center rounded-md border bg-slate-50 hover:shadow", pf?.id === r.id && "ring-2 ring-primary")}>
+                            <span className="block size-9 rounded-full" style={{ background: r.bg, boxShadow: `inset 0 0 0 5px transparent, 0 0 0 1px ${r.inner}` }}>
+                              <span className="m-1.5 block size-6 rounded-full bg-sky-200" style={{ boxShadow: `0 0 0 1.5px ${r.inner}` }} />
+                            </span>
+                          </button>
+                        ))}
+                        {uploadedFrames.map((f) => (
+                          <button key={f.id} type="button" data-testid={`pf-${f.id}`} title={f.title} onClick={() => pick(f)}
+                            className={cn("flex h-14 items-center justify-center overflow-hidden rounded-md border bg-[repeating-conic-gradient(#e5e7eb_0_25%,#fff_0_50%)] bg-[length:10px_10px] hover:shadow", pf?.id === f.id && "ring-2 ring-primary")}>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={`/api/asset/${f.id}`} alt={f.title} className="max-h-full max-w-full object-contain" />
+                          </button>
+                        ))}
+                      </div>
+                      {uploadedFrames.length === 0 && <p className="text-[11px] text-muted-foreground">អេដមីនអាចបន្ថែមស៊ុមរូបថតផ្ទាល់ខ្លួនក្នុង «គ្រប់គ្រង → ស៊ុម»</p>}
+                    </div>
+
+                    {!uploaded && (
+                      <Range label="សមាមាត្រ (ទទឹង/កម្ពស់)" value={el.ar ?? 0.75} min={0.5} max={1.5} step={0.05} onChange={(v) => update(el.id, { ar: v }, "ar")} />
+                    )}
+                    {!pf && (
+                      <div className="flex items-center gap-2">
+                        <input type="color" value={el.borderColor ?? "#000000"} onChange={(e) => update(el.id, { borderColor: e.target.value }, "bcolor")} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5" />
+                        <div className="flex-1"><Range label="កម្រាស់ស៊ុម" value={el.borderWidth ?? 0} min={0} max={12} onChange={(v) => update(el.id, { borderWidth: v }, "bwidth")} suffix=" px" /></div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2 border-t pt-3" data-testid="crop-section">
+                      <h5 className="text-sm font-semibold">ការដាក់រូប (Fill / Fit / Crop)</h5>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([["fill", "Fill — ពេញស៊ុម"], ["fit", "Fit — ឃើញទាំងរូប"]] as const).map(([k, label]) => (
+                          <Button key={k} type="button" size="sm" variant={crop.fit === k ? "default" : "outline"} data-testid={`crop-${k}`} onClick={() => photo.apply(el.id, { fit: k })}>{label}</Button>
+                        ))}
+                      </div>
+                      {crop.fit === "fit" && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <input type="color" value={el.fitBg ?? "#ffffff"} onChange={(e) => update(el.id, { fitBg: e.target.value }, "fitbg")} className="h-7 w-9 cursor-pointer rounded border bg-transparent p-0.5" /> ពណ៌ផ្ទៃក្រោយរូប
+                        </div>
+                      )}
+                      <Range label="ពង្រីករូប (Zoom)" value={crop.zoom} min={1} max={4} step={0.05} suffix="×" onChange={(v) => photo.apply(el.id, { zoom: Math.round(v * 100) / 100 })} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Range label="រំកិលឆ្វេង-ស្តាំ" value={crop.px} min={0} max={100} onChange={(v) => photo.apply(el.id, { px: v })} />
+                        <Range label="រំកិលលើ-ក្រោម" value={crop.py} min={0} max={100} onChange={(v) => photo.apply(el.id, { py: v })} />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="button" size="sm" variant={photo.cropping ? "default" : "outline"} className="flex-1" disabled={!photo.hasPhoto} data-testid="crop-toggle" onClick={() => photo.toggleCrop(el.id)}>
+                          <Crop className="size-4" /> {photo.cropping ? "បញ្ចប់ការកាត់" : "អូសកាត់រូប"}
+                        </Button>
+                        <Button type="button" size="icon" variant="outline" className="size-8" title="កំណត់ឡើងវិញ" data-testid="crop-reset" onClick={() => photo.reset(el.id)}><RotateCcw className="size-4" /></Button>
+                      </div>
+                      {photo.cropping && <p className="rounded bg-pink-50 px-2 py-1 text-xs text-pink-700 dark:bg-pink-950/40 dark:text-pink-300">អូសលើរូបក្នុងក្រដាស ដើម្បីរំកិលរូបឲ្យត្រូវស៊ុម ហើយប្រើ Zoom ដើម្បីពង្រីក។</p>}
+                      {!photo.hasPhoto && <p className="text-xs text-muted-foreground">បន្ថែមរូបថតអ្នកទទួលសិន (ផ្ទាំង «អ្នកទទួល») ទើបអាចអូសកាត់បាន។</p>}
+                      {photo.canScope && (
+                        <label className="flex items-center gap-2 text-xs">
+                          <input type="checkbox" checked={photo.cropAll} onChange={(e) => photo.setCropAll(e.target.checked)} data-testid="crop-all" />
+                          អនុវត្តការកាត់ទៅអ្នកទទួលទាំងអស់ {photo.perPerson && <span className="text-muted-foreground">(ឥឡូវនេះ៖ តែអ្នកនេះ)</span>}
+                        </label>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+              {selected.type === "image" && (
+                <div className="flex items-center gap-2">
+                  <input type="color" value={selected.borderColor ?? "#000000"} onChange={(e) => update(selected.id, { borderColor: e.target.value }, "bcolor")} className="h-8 w-10 cursor-pointer rounded border bg-transparent p-0.5" />
+                  <div className="flex-1"><Range label="កម្រាស់ស៊ុម" value={selected.borderWidth ?? 0} min={0} max={12} onChange={(v) => update(selected.id, { borderWidth: v }, "bwidth")} suffix=" px" /></div>
+                </div>
+              )}
             </>
           )}
 

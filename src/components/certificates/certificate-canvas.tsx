@@ -2,6 +2,8 @@
 
 import "./certificate-fonts";
 import { textFxStyle } from "@/lib/text-effects";
+import { PhotoView } from "./photo-view";
+import { resolveCrop } from "@/lib/photo-frames";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   MM_TO_PX, PT_TO_PX, fillVariables, fontCss, getTheme, pageSizePx,
@@ -10,6 +12,9 @@ import {
 
 export type EditorHooks = {
   selectedId: string | null;
+  /** Photo element being cropped (dragging inside it pans the picture instead of moving it). */
+  cropId?: string | null;
+  onCropPointerDown?: (e: ReactPointerEvent<HTMLDivElement>, el: DesignElement) => void;
   guides: { x: number | null; y: number | null };
   onElementPointerDown: (e: ReactPointerEvent<HTMLDivElement>, el: DesignElement) => void;
   onResizePointerDown: (e: ReactPointerEvent<HTMLDivElement>, el: DesignElement) => void;
@@ -171,7 +176,7 @@ function ElementView({
     opacity: el.opacity ?? 1,
     transform: el.rotate ? `rotate(${el.rotate}deg)` : undefined,
     transformOrigin: "center",
-    cursor: editor ? "move" : undefined,
+    cursor: editor ? (editor.cropId === el.id && el.type === "photo" ? "grab" : "move") : undefined,
     outline: selected ? "2px solid #2563eb" : undefined,
     outlineOffset: 3,
     touchAction: editor ? "none" : undefined,
@@ -179,7 +184,7 @@ function ElementView({
   };
 
   let inner: React.ReactNode = null;
-  const radius = el.shape === "circle" ? "50%" : el.shape === "rounded" ? "12%" : 0;
+  const radius = el.shape === "circle" || el.shape === "oval" ? "50%" : el.shape === "rounded" ? "12%" : 0;
   const ratio = el.shape === "circle" ? 1 : el.ar;
   const frame: CSSProperties = {
     borderRadius: radius,
@@ -226,16 +231,9 @@ function ElementView({
       </div>
     ) : null;
   } else if (el.type === "photo") {
-    if (recipient?.photo) {
-      inner = (
-        <div style={{ aspectRatio: String(ratio ?? 0.75), backgroundImage: `url(${recipient.photo})`, backgroundSize: "cover", backgroundPosition: "center top", ...frame }} />
-      );
-    } else if (editor) {
-      inner = (
-        <div style={{ aspectRatio: String(ratio ?? 0.75), border: "2px dashed #94a3b8", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: 14, background: "rgba(148,163,184,0.12)", ...frame }}>
-          រូបថត
-        </div>
-      );
+    const photo = recipient?.photo;
+    if (photo || editor || el.pframe) {
+      inner = <PhotoView el={el} photo={photo} crop={resolveCrop(el, recipient)} placeholder={!photo && editor ? "រូបថត" : null} cropping={!!editor && editor.cropId === el.id && !!photo} />;
     }
   } else if (el.type === "qr") {
     if (recipient?.qr) {
@@ -256,7 +254,7 @@ function ElementView({
     <div
       data-el-id={el.id}
       style={wrap}
-      onPointerDown={editor ? (e) => editor.onElementPointerDown(e, el) : undefined}
+      onPointerDown={editor ? (e) => (editor.cropId === el.id && el.type === "photo" && recipient?.photo && editor.onCropPointerDown ? editor.onCropPointerDown(e, el) : editor.onElementPointerDown(e, el)) : undefined}
     >
       {inner}
       {editor && selected && (

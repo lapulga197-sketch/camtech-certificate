@@ -71,7 +71,7 @@ export async function updateGuide(id: string, title: string, doc: string): Promi
   return { success: true };
 }
 
-export async function deleteAsset(id: string, kind: "help" | "frame"): Promise<Result> {
+export async function deleteAsset(id: string, kind: "help" | "frame" | "pframe"): Promise<Result> {
   if (!(await admin())) return { success: false, message: "គ្មានសិទ្ធិ" };
   if (!/^[a-f0-9]{32}$/.test(id)) return { success: false };
   await query("DELETE FROM asset WHERE id = $1 AND kind = $2", [id, kind]);
@@ -87,6 +87,20 @@ export async function updateFrame(id: string, title: string, docs: string[], ori
     orientation: ["landscape", "portrait", "both"].includes(orientation) ? orientation : "both",
   };
   await query("UPDATE asset SET meta = $1 WHERE id = $2 AND kind = 'frame'", [JSON.stringify(meta), id]);
+  revalidatePath("/admin/frames");
+  return { success: true };
+}
+
+export async function updatePFrame(id: string, title: string, ar: number, hole: number[], shape: string): Promise<Result> {
+  if (!(await admin())) return { success: false, message: "គ្មានសិទ្ធិ" };
+  if (!/^[a-f0-9]{32}$/.test(id)) return { success: false };
+  const n = (v: unknown, lo: number, hi: number, d: number) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : d);
+  const h = [0, 1, 2, 3].map((i) => n(hole?.[i], 0, 45, 14));
+  const meta = {
+    title: s(title, 80), ar: Math.round(n(ar, 0.2, 5, 0.8) * 1000) / 1000, hole: h,
+    shape: ["rect", "rounded", "oval"].includes(shape) ? shape : "rect",
+  };
+  await query("UPDATE asset SET meta = $1 WHERE id = $2 AND kind = 'pframe'", [JSON.stringify(meta), id]);
   revalidatePath("/admin/frames");
   return { success: true };
 }
