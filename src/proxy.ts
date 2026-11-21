@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/register", "/verify"];
+// /api/asset decides per file (guides need a session, brand images and frames are public)
+const PUBLIC_PATHS = ["/login", "/register", "/verify", "/forgot", "/reset", "/api/asset"];
 
 export default auth((req) => {
   const { nextUrl } = req;

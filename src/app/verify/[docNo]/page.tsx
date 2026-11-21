@@ -1,5 +1,7 @@
 import { BadgeCheck, CheckCircle2, XCircle } from "lucide-react";
 import { queryOne } from "@/lib/db";
+import { allow } from "@/lib/security";
+import { clientInfo } from "@/lib/request-info";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatDateKh } from "@/lib/utils";
 import { DOC_TYPES } from "@/lib/doc-types";
@@ -12,10 +14,20 @@ type Row = { doc_no: string; doc_type: DocType; recipient_name: string; detail: 
 export default async function VerifyPage({ params }: { params: Promise<{ docNo: string }> }) {
   const { docNo } = await params;
   let row: Row | null = null;
+  let limited = false;
   try {
-    row = await queryOne<Row>("SELECT doc_no, doc_type, recipient_name, detail, org_name, issued_date, revoked FROM issued_doc WHERE doc_no = $1", [decodeURIComponent(docNo)]);
+    // stops scripts from walking through document numbers
+    limited = !(await allow(`vf:${(await clientInfo()).ip}`, 60, 600));
+    if (!limited) row = await queryOne<Row>("SELECT doc_no, doc_type, recipient_name, detail, org_name, issued_date, revoked FROM issued_doc WHERE doc_no = $1", [decodeURIComponent(docNo)]);
   } catch {
     row = null;
+  }
+  if (limited) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <p className="text-center text-muted-foreground">ស្នើច្រើនដងពេក — សូមរង់ចាំបន្តិច ហើយសាកម្តងទៀត។</p>
+      </div>
+    );
   }
   const label = row ? DOC_TYPES[row.doc_type]?.label ?? "ឯកសារ" : "ឯកសារ";
 

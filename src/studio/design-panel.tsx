@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Loader2, PenLine, RectangleHorizontal, RectangleVertical, RotateCcw, Save, Share2, Stamp, Trash2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
   FONTS, PAPERS, THEMES, applyTheme, newId, pageSizeMm, rebuildLayout, relayout, scaleFonts,
   type BorderStyle, type CertDesign, type LangMode, type Org, type PaperKey,
 } from "@/lib/certificate-design";
-import { deleteTemplate, loadTemplate, saveTemplate, setTemplateShared, type TemplateRow } from "./actions";
+import { deleteTemplate, listFrames, loadTemplate, saveTemplate, setTemplateShared, type FrameRow, type TemplateRow } from "./actions";
 import { DOC_TYPES } from "@/lib/doc-types";
 import { fileToDataUrl, fileToTransparentPng } from "./image-utils";
 
@@ -145,6 +145,12 @@ export function DesignPanel({
   const wmInput = useRef<HTMLInputElement>(null);
   const [tplName, setTplName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [frames, setFrames] = useState<FrameRow[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void listFrames(design.doc ?? "certificate", design.orientation).then((f) => alive && setFrames(f)).catch(() => alive && setFrames([]));
+    return () => { alive = false; };
+  }, [design.doc, design.orientation]);
   const mm = pageSizeMm(design);
   const cfg = DOC_TYPES[design.doc ?? "certificate"];
 
@@ -291,6 +297,36 @@ export function DesignPanel({
           <span>បង្ហាញតុបតែងតាមធីម</span>
           <Switch checked={design.showDecor} onCheckedChange={(v) => setDesign((d) => ({ ...d, showDecor: v }))} />
         </label>
+      </Section>
+
+      <Section title="ស៊ុម / ម៉ូតរៀបចំរួច">
+        {frames === null ? (
+          <p className="text-xs text-muted-foreground">កំពុងផ្ទុក…</p>
+        ) : frames.length === 0 ? (
+          <p className="text-xs text-muted-foreground" data-testid="frames-empty">មិនទាន់មានស៊ុមសម្រាប់ប្រភេទ និងទិសក្រដាសនេះទេ (អេដមីនអាចបន្ថែមក្នុង «គ្រប់គ្រង → ស៊ុម»)</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2" data-testid="frame-grid">
+            {frames.map((f) => (
+              <button
+                key={f.id} type="button" title={f.title} data-testid={`frame-${f.id}`}
+                onClick={() => setDesign((d) => ({ ...d, frame: { id: f.id, title: f.title, opacity: d.frame?.opacity ?? 1 }, showDecor: false, border: { ...d.border, style: "none" } }))}
+                className={cn("overflow-hidden rounded-md border bg-white text-left text-[11px] hover:shadow", design.frame?.id === f.id && "ring-2 ring-primary")}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/asset/${f.id}`} alt={f.title} loading="lazy" className="h-16 w-full bg-slate-50 object-contain" />
+                <div className="truncate px-1.5 py-1 font-medium">{f.title}</div>
+              </button>
+            ))}
+          </div>
+        )}
+        {design.frame && (
+          <>
+            <Range label="ភាពច្បាស់នៃស៊ុម" value={design.frame.opacity} min={0.2} max={1} step={0.05} onChange={(v) => setDesign((d) => (d.frame ? { ...d, frame: { ...d.frame, opacity: v } } : d), "frameop")} />
+            <Button type="button" variant="ghost" size="sm" onClick={() => setDesign((d) => ({ ...d, frame: undefined, showDecor: true, border: { ...applyTheme(d, d.themeId).border } }))} data-testid="frame-remove">
+              <X className="size-4" /> ដកស៊ុមចេញ
+            </Button>
+          </>
+        )}
       </Section>
 
       <Section title="ក្រដាស">

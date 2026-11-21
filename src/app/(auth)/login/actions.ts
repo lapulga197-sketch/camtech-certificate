@@ -3,11 +3,12 @@
 import { AuthError } from "next-auth";
 import { signIn } from "@/lib/auth";
 import { authenticate } from "@/lib/users";
+import { logActivity } from "@/lib/activity";
 
 export type LoginState = { error?: string; info?: string };
 
 function safeTarget(v: string): string {
-  return v.startsWith("/") && !v.startsWith("//") ? v : "/studio";
+  return v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\") ? v : "/studio";
 }
 
 export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
@@ -18,10 +19,15 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
 
   try {
     const r = await authenticate(email, password, { touch: false });
-    if (r.state === "bad") return { error: "អ៊ីមែល ឬលេខសម្ងាត់មិនត្រឹមត្រូវ" };
+    if (r.state === "locked") return { error: "ព្យាយាមច្រើនដងពេក — សូមរង់ចាំ ១៥ នាទី ហើយសាកម្តងទៀត (ឬប្រើ «ភ្លេចលេខសម្ងាត់»)" };
+    if (r.state === "bad") {
+      await logActivity("login_fail", { email });
+      return { error: "អ៊ីមែល ឬលេខសម្ងាត់មិនត្រឹមត្រូវ" };
+    }
     if (r.state === "pending") return { info: "គណនីរបស់អ្នកកំពុងរង់ចាំអេដមីនអនុម័ត។ សូមរង់ចាំ ហើយព្យាយាមចូលម្តងទៀតនៅពេលក្រោយ។" };
     if (r.state === "rejected") return { error: "សំណើចុះឈ្មោះរបស់អ្នកត្រូវបានបដិសេធ។ សូមទាក់ទងអេដមីន។" };
     if (r.state === "suspended") return { error: "គណនីរបស់អ្នកត្រូវបានផ្អាក។ សូមទាក់ទងអេដមីន។" };
+    if (r.state === "ok") await logActivity("login", { userId: r.user.id, email: r.user.email });
   } catch (err) {
     console.error("login check failed", err);
     return { error: "មិនអាចតភ្ជាប់ទៅ database បានទេ — សូមពិនិត្យ DATABASE_URL ក្នុង Vercel" };

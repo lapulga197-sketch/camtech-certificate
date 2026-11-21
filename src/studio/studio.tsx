@@ -20,7 +20,7 @@ import {
 import { DOC_TYPES } from "@/lib/doc-types";
 import { newDesignFor } from "@/lib/new-design";
 import { todayInPhnomPenh } from "@/lib/timezone";
-import type { TemplateRow } from "./actions";
+import { trackUse, type TemplateRow } from "./actions";
 import { DesignPanel } from "./design-panel";
 import { ElementPanel } from "./element-panel";
 import { RecipientsPanel } from "./recipients-panel";
@@ -256,6 +256,9 @@ export function DocStudio({
     setBusy(kind);
     try {
       await fn();
+      const many = kind === "zip" || kind === "pdfAll" || kind === "pdfSheet";
+      const action = kind === "png" ? "export_png" : kind === "zip" ? "export_zip" : kind === "pdfSheet" ? "export_sheet" : "export_pdf";
+      void trackUse(action, cfg.key, many ? Math.max(1, recipients.length) : 1).catch(() => undefined);
     } catch (err) {
       console.error(err);
       toast.error("មិនអាចទាញយកបានទេ — សូមព្យាយាមម្តងទៀត");
@@ -270,6 +273,7 @@ export function DocStudio({
 
   function doPrint(mode: "page" | "sheet" = "page") {
     if (printing) return;
+    void trackUse("print", cfg.key, Math.max(1, recipients.length)).catch(() => undefined);
     setPrinting(mode);
   }
 

@@ -1,6 +1,6 @@
 "use server";
 
-import bcrypt from "bcryptjs";
+import { hashPassword } from "@/lib/password";
 import { revalidatePath } from "next/cache";
 import { currentUser } from "@/lib/session";
 import { getUserById, isAdmin, type Role, type Status } from "@/lib/users";
@@ -42,10 +42,12 @@ export async function setUserRole(id: string, role: Role): Promise<Result> {
 }
 
 export async function resetUserPassword(id: string, password: string): Promise<Result> {
-  if (password.length < 6) return { success: false, message: "លេខសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ" };
+  if (password.length < 6 || password.length > 200) return { success: false, message: "លេខសម្ងាត់ត្រូវមានយ៉ាងតិច ៦ តួអក្សរ" };
   const c = await context(id);
   if (!c.ok) return { success: false, message: c.message };
-  await query("UPDATE app_user SET password_hash = $1 WHERE id = $2", [await bcrypt.hash(password, 10), id]);
+  await query("UPDATE app_user SET password_hash = $1, reset_requested_at = NULL WHERE id = $2", [await hashPassword(password), id]);
+  await query("DELETE FROM password_reset WHERE user_id = $1", [id]);
+  revalidatePath("/admin/users");
   return { success: true };
 }
 
@@ -53,6 +55,7 @@ export async function deleteUser(id: string): Promise<Result> {
   const c = await context(id);
   if (!c.ok) return { success: false, message: c.message };
   await query("DELETE FROM design_template WHERE owner_id = $1", [id]);
+  await query("DELETE FROM password_reset WHERE user_id = $1", [id]);
   await query("DELETE FROM app_user WHERE id = $1", [id]);
   revalidatePath("/admin/users");
   return { success: true };

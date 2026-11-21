@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { FONTS, variablesFor, newId, type CertDesign, type DesignElement, type ImageShape } from "@/lib/certificate-design";
 import { fileToDataUrl } from "./image-utils";
+import { DEFAULT_FX, FX_PRESETS, textFxStyle, type FxPreset, type TextFx } from "@/lib/text-effects";
 
 type SetDesign = (next: CertDesign | ((d: CertDesign) => CertDesign), key?: string) => void;
 
@@ -228,6 +229,51 @@ export function ElementPanel({
               </div>
               <Range label="គម្លាតបន្ទាត់" value={selected.lineHeight ?? 1.4} min={0.9} max={3} step={0.05} onChange={(v) => update(selected.id, { lineHeight: v }, "lh")} />
               <Range label="គម្លាតអក្សរ" value={selected.letterSpacing ?? 0} min={0} max={20} step={0.5} suffix=" px" onChange={(v) => update(selected.id, { letterSpacing: v }, "ls")} />
+
+              <div className="space-y-2 border-t pt-3" data-testid="fx-section">
+                <h5 className="text-sm font-semibold">ឥទ្ធិពលអក្សរ (3D / ស្រមោល / ពណ៌)</h5>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {FX_PRESETS.map((p) => {
+                    const active = (selected.fx?.preset ?? "none") === p.id;
+                    const fx: TextFx = { ...DEFAULT_FX, ...p.sample, preset: p.id };
+                    return (
+                      <button
+                        key={p.id} type="button" data-testid={`fx-${p.id}`} title={p.label}
+                        onClick={() => update(selected.id, { fx: p.id === "none" ? undefined : { ...DEFAULT_FX, ...p.sample, preset: p.id as FxPreset } })}
+                        className={cn("flex h-14 flex-col items-center justify-center overflow-hidden rounded-md border bg-slate-100 text-center leading-tight hover:shadow", active && "ring-2 ring-primary")}
+                      >
+                        <span style={{ fontFamily: "'Hanuman', serif", fontSize: 17, fontWeight: 700, color: p.sampleColor ?? "#1f2937", ...textFxStyle(p.id === "none" ? undefined : { ...fx, size: Math.min(fx.size, 6) }) }}>កខ Aa</span>
+                        <span className="text-[10px] text-slate-600">{p.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {selected.fx && selected.fx.preset !== "none" && (() => {
+                  const fx = selected.fx!;
+                  const needs = FX_PRESETS.find((p) => p.id === fx.preset)?.needs ?? [];
+                  const set = (patch: Partial<TextFx>, key: string) => update(selected.id, { fx: { ...fx, ...patch } }, key);
+                  const label1 = fx.preset.startsWith("gradient") ? "ពណ៌ចាប់ផ្តើម" : fx.preset === "emboss" ? "ពណ៌ពន្លឺ" : "ពណ៌ឥទ្ធិពល";
+                  const label2 = fx.preset.startsWith("gradient") ? "ពណ៌បញ្ចប់" : fx.preset === "emboss" ? "ពណ៌ស្រមោល" : "ពណ៌ទី ២";
+                  return (
+                    <div className="space-y-2 rounded-md bg-muted/40 p-2">
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        {needs.includes("c1") && (
+                          <label className="flex items-center gap-1.5">
+                            <input type="color" value={fx.c1.slice(0, 7)} onChange={(e) => set({ c1: e.target.value }, "fxc1")} className="h-7 w-9 cursor-pointer rounded border bg-transparent p-0.5" data-testid="fx-c1" /> {label1}
+                          </label>
+                        )}
+                        {needs.includes("c2") && (
+                          <label className="flex items-center gap-1.5">
+                            <input type="color" value={fx.c2.slice(0, 7)} onChange={(e) => set({ c2: e.target.value }, "fxc2")} className="h-7 w-9 cursor-pointer rounded border bg-transparent p-0.5" data-testid="fx-c2" /> {label2}
+                          </label>
+                        )}
+                      </div>
+                      {needs.includes("size") && <Range label={fx.preset.startsWith("3d") || fx.preset.includes("3d") || fx.preset === "long-shadow" ? "ជម្រៅ" : "កម្លាំង"} value={fx.size} min={1} max={24} onChange={(v) => set({ size: v }, "fxs")} suffix=" px" />}
+                      {needs.includes("angle") && <Range label="ទិស" value={fx.angle} min={0} max={360} step={5} onChange={(v) => set({ angle: v }, "fxa")} suffix="°" />}
+                    </div>
+                  );
+                })()}
+              </div>
             </>
           )}
 

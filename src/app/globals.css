@@ -195,8 +195,28 @@ body {
   background: var(--card);
   height: 100%;
 }
+/* Lighter variant for small boxes (notices): a coloured light running round the edge. */
+@property --run-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.run-border {
+  border: 2px solid transparent;
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    conic-gradient(from var(--run-angle), oklch(0.6 0.22 280), oklch(0.62 0.25 330), oklch(0.68 0.2 40), oklch(0.6 0.18 200), oklch(0.6 0.22 280)) border-box;
+  animation: run-angle 4s linear infinite;
+}
+@keyframes run-angle {
+  to {
+    --run-angle: 360deg;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .gradient-border-wrap::before {
+  .gradient-border-wrap::before,
+  .run-border {
     animation: none;
   }
 }

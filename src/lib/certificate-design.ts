@@ -11,6 +11,7 @@
 import { MONTH_NAMES_KH } from "@/lib/khmer";
 import { buildElements } from "@/lib/certificate-layouts";
 import { themeColor } from "@/lib/theme-color";
+import type { TextFx } from "@/lib/text-effects";
 
 export type DocType = "certificate" | "award" | "appreciation_letter" | "greeting" | "student_card";
 export type PaperKey = "A4" | "A5" | "A6" | "A3" | "LETTER" | "CR80" | "CUSTOM";
@@ -190,6 +191,8 @@ export type DesignElement = {
   align?: "left" | "center" | "right";
   lineHeight?: number;
   letterSpacing?: number; // px
+  /** Text effect (3D, shadow, outline, glow, gradient…). */
+  fx?: TextFx;
   opacity?: number; // 0..1
   rotate?: number; // deg
   shape?: ImageShape;
@@ -215,6 +218,8 @@ export type CertDesign = {
   bgImage?: string;
   bgFit: "cover" | "contain" | "stretch";
   bgImageOpacity: number;
+  /** Decorative frame uploaded by an admin (a transparent PNG / SVG laid over the page). */
+  frame?: { id: string; title: string; opacity: number };
   showDecor: boolean;
   border: { style: BorderStyle; color: string; color2: string; widthMm: number; insetMm: number };
   watermark: {
@@ -368,8 +373,9 @@ export function applyTheme(d: CertDesign, themeId: string): CertDesign {
     ...d,
     themeId: theme.id,
     bgColor: theme.bgColor,
-    border: scaledBorder(theme, d.doc),
-    showDecor: true,
+    // an uploaded frame replaces the theme's own border and decoration
+    border: d.frame ? { ...scaledBorder(theme, d.doc), style: "none" } : scaledBorder(theme, d.doc),
+    showDecor: !d.frame,
     elements: recolorForTheme(d.elements, theme),
     watermark: { ...d.watermark, color: theme.primary },
   };

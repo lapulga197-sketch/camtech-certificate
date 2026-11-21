@@ -1,6 +1,7 @@
 "use client";
 
 import "./certificate-fonts";
+import { textFxStyle } from "@/lib/text-effects";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   MM_TO_PX, PT_TO_PX, fillVariables, fontCss, getTheme, pageSizePx,
@@ -207,6 +208,7 @@ function ElementView({
           letterSpacing: el.letterSpacing ? `${el.letterSpacing}px` : undefined,
           whiteSpace: "pre-wrap",
           minHeight: "1em",
+          ...textFxStyle(el.fx),
         }}
       >
         {content ? body : editor ? " " : ""}
@@ -330,6 +332,14 @@ export function CertificateCanvas({
             </div>
           )}
         </div>
+      )}
+      {design.frame && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/asset/${design.frame.id}`} alt="" draggable={false} data-frame
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "fill", opacity: design.frame.opacity, pointerEvents: "none" }}
+        />
       )}
       <Border design={design} />
       {design.elements.map((el) => (

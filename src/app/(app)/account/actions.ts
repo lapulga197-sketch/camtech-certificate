@@ -1,6 +1,6 @@
 "use server";
 
-import bcrypt from "bcryptjs";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { revalidatePath } from "next/cache";
 import { currentUser } from "@/lib/session";
 import { query, queryOne } from "@/lib/db";
@@ -36,7 +36,7 @@ export async function changePassword(_prev: AccountState, fd: FormData): Promise
   const next = String(fd.get("next") ?? "");
   if (next.length < 6) return { error: "លេខសម្ងាត់ថ្មីត្រូវមានយ៉ាងតិច ៦ តួអក្សរ" };
   const row = await queryOne<{ password_hash: string }>("SELECT password_hash FROM app_user WHERE id = $1", [me.id]);
-  if (!row || !(await bcrypt.compare(cur, row.password_hash))) return { error: "លេខសម្ងាត់បច្ចុប្បន្នមិនត្រឹមត្រូវ" };
-  await query("UPDATE app_user SET password_hash = $1 WHERE id = $2", [await bcrypt.hash(next, 10), me.id]);
+  if (!row || !(await verifyPassword(cur, row.password_hash))) return { error: "លេខសម្ងាត់បច្ចុប្បន្នមិនត្រឹមត្រូវ" };
+  await query("UPDATE app_user SET password_hash = $1 WHERE id = $2", [await hashPassword(next), me.id]);
   return { ok: "បានប្តូរលេខសម្ងាត់" };
 }

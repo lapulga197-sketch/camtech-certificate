@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen } from "lucide-react";
 import { requireUser } from "@/lib/session";
 import { docBySlug } from "@/lib/doc-types";
 import { listTemplates } from "@/studio/actions";
+import { logActivity } from "@/lib/activity";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { DocStudio } from "@/studio/studio";
@@ -15,7 +16,10 @@ export default async function DocStudioPage({ params }: { params: Promise<{ slug
   const cfg = docBySlug(slug);
   if (!cfg) notFound();
   const user = await requireUser();
-  const templates = await listTemplates(user.id, cfg.key).catch(() => []);
+  const [templates] = await Promise.all([
+    listTemplates(user.id, cfg.key).catch(() => []),
+    logActivity("open", { userId: user.id, email: user.email, doc: cfg.key }),
+  ]);
 
   return (
     <div>
@@ -23,9 +27,12 @@ export default async function DocStudioPage({ params }: { params: Promise<{ slug
         title={cfg.label}
         description={cfg.desc}
         action={
-          <Button asChild variant="outline">
-            <Link href="/studio"><ArrowLeft className="size-4" /> ប្រភេទឯកសារ</Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline"><Link href={`/help?doc=${cfg.slug}`} data-testid="doc-help"><BookOpen className="size-4" /> របៀបប្រើ</Link></Button>
+            <Button asChild variant="outline">
+              <Link href="/studio"><ArrowLeft className="size-4" /> ប្រភេទឯកសារ</Link>
+            </Button>
+          </div>
         }
       />
       <DocStudio

@@ -62,6 +62,9 @@ function dataUrlToBlob(url: string): Blob {
   return new Blob([arr], { type: mime });
 }
 
+/** Lets the browser paint / handle clicks between heavy renders (keeps big batches responsive). */
+const breathe = () => new Promise<void>((r) => setTimeout(r, 0));
+
 export function recipientFileName(r: Recipient | null, index: number): string {
   return `${String(index + 1).padStart(2, "0")}-${safeFileName(r?.name || "document")}`;
 }
@@ -92,6 +95,7 @@ export async function exportZip(
   const zip = new JSZip();
   for (let i = 0; i < recipients.length; i++) {
     onProgress(i, recipients.length);
+    await breathe();
     const url = await renderCertificate(design, recipients[i], org, { format: "png", pixelRatio });
     zip.file(`${recipientFileName(recipients[i], i)}.png`, dataUrlToBlob(url));
   }
@@ -110,6 +114,7 @@ export async function exportPdf(
   const pdf = new jsPDF({ orientation, unit: "mm", format: [mm.w, mm.h], compress: true });
   for (let i = 0; i < recipients.length; i++) {
     onProgress(i, recipients.length);
+    await breathe();
     const url = await renderCertificate(design, recipients[i], org, { format: "jpeg", pixelRatio, quality: 0.93 });
     if (i > 0) pdf.addPage([mm.w, mm.h], orientation);
     pdf.addImage(url, "JPEG", 0, 0, mm.w, mm.h, undefined, "FAST");
@@ -129,6 +134,7 @@ export async function exportCardSheetPdf(
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [g.A4.w, g.A4.h], compress: true });
   for (let i = 0; i < recipients.length; i++) {
     onProgress(i, recipients.length);
+    await breathe();
     const url = await renderCertificate(design, recipients[i], org, { format: "jpeg", pixelRatio, quality: 0.93 });
     if (i > 0 && i % g.perPage === 0) pdf.addPage([g.A4.w, g.A4.h], "portrait");
     const c = g.cell(i);

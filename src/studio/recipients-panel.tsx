@@ -190,13 +190,22 @@ export function RecipientsPanel({
       registrable.map((x) => ({ key: x.id, name: x.name, detail: x.course || x.reason || x.subject || x.position || "", date: x.date })),
       window.location.origin
     );
-    setBusy(false);
     if (!r.success || !r.results) {
+      setBusy(false);
       toast.error(r.message || "មានបញ្ហាកើតឡើង");
       return;
     }
-    const map = new Map(r.results.map((x) => [x.key, x]));
+    // draw the QR codes here (in chunks, so the page stays responsive)
+    const QR = (await import("qrcode")).default;
+    const base = (r.verifyBase || window.location.origin).replace(/\/$/, "");
+    const map = new Map<string, { certNo: string; qr: string }>();
+    for (let i = 0; i < r.results.length; i++) {
+      const x = r.results[i];
+      map.set(x.key, { certNo: x.certNo, qr: await QR.toDataURL(`${base}/verify/${x.certNo}`, { width: 300, margin: 1 }) });
+      if (i % 10 === 9) await new Promise((res) => setTimeout(res, 0));
+    }
     setRecipients((prev) => prev.map((x) => (map.has(x.id) ? { ...x, certNo: map.get(x.id)!.certNo, qr: map.get(x.id)!.qr } : x)));
+    setBusy(false);
     toast.success(`បានចុះបញ្ជី ${r.results.length} ឯកសារ`);
   }
 

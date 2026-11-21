@@ -29,9 +29,12 @@ function pool(): Pool {
     }
     globalForPg.__csPool = new Pool({
       connectionString: cleaned,
-      max: 5,
+      max: Number(process.env.DB_POOL_MAX) || 5,
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 15_000,
+      // A runaway query must never hold a connection (and the whole site) hostage.
+      statement_timeout: 25_000,
+      query_timeout: 30_000,
       ssl: local ? false : { rejectUnauthorized: false },
     });
   }
@@ -87,15 +90,80 @@ const SCHEMA = [
     id TEXT PRIMARY KEY,
     value INTEGER NOT NULL DEFAULT 0
   )`,
+  // --- v2: settings, uploaded files, usage log, security --------------------
+  `ALTER TABLE app_user ADD COLUMN IF NOT EXISTS prefs TEXT`,
+  `ALTER TABLE app_user ADD COLUMN IF NOT EXISTS reset_requested_at TIMESTAMPTZ`,
+  `CREATE TABLE IF NOT EXISTS app_setting (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS asset (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    mime TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BYTEA NOT NULL,
+    meta TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS asset_kind_idx ON asset (kind, sort_order, created_at)`,
+  `CREATE TABLE IF NOT EXISTS activity_log (
+    id BIGSERIAL PRIMARY KEY,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    user_id TEXT,
+    email TEXT,
+    action TEXT NOT NULL,
+    doc_type TEXT,
+    amount INTEGER NOT NULL DEFAULT 1,
+    ip TEXT,
+    country TEXT,
+    region TEXT,
+    city TEXT,
+    device TEXT,
+    os TEXT,
+    browser TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS activity_log_time_idx ON activity_log (created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS activity_log_user_idx ON activity_log (user_id, created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS rate_limit (
+    key TEXT PRIMARY KEY,
+    count INTEGER NOT NULL DEFAULT 0,
+    window_start TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE TABLE IF NOT EXISTS password_reset (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS password_reset_user_idx ON password_reset (user_id)`,
 ];
 
+/** Bump when SCHEMA changes; cold starts skip the DDL when the database is already at this version. */
+const SCHEMA_VERSION = "2";
+
 async function migrate(): Promise<void> {
+  // Fast path: after the first deploy every cold start only runs this one cheap query.
+  try {
+    const r = await pool().query<{ value: string }>("SELECT value FROM app_setting WHERE key = '_schema'");
+    if (r.rows[0]?.value === SCHEMA_VERSION) return;
+  } catch {
+    /* table does not exist yet — fall through to the full migration */
+  }
   const client = await pool().connect();
   try {
     // Serialise concurrent cold starts.
     await client.query("SELECT pg_advisory_lock(727001)");
     try {
       for (const sql of SCHEMA) await client.query(sql);
+      await client.query(
+        "INSERT INTO app_setting (key, value) VALUES ('_schema', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()",
+        [SCHEMA_VERSION]
+      );
     } finally {
       await client.query("SELECT pg_advisory_unlock(727001)");
     }
@@ -123,6 +191,23 @@ export async function query<T extends QueryResultRow = QueryResultRow>(text: str
 export async function queryOne<T extends QueryResultRow = QueryResultRow>(text: string, params: unknown[] = []): Promise<T | null> {
   const rows = await query<T>(text, params);
   return rows[0] ?? null;
+}
+
+/** Runs `fn` inside one transaction on a dedicated connection. */
+export async function tx<T>(fn: (q: (text: string, params?: unknown[]) => Promise<QueryResultRow[]>) => Promise<T>): Promise<T> {
+  await ready();
+  const client = await pool().connect();
+  try {
+    await client.query("BEGIN");
+    const out = await fn(async (text, params = []) => (await client.query(text, params)).rows);
+    await client.query("COMMIT");
+    return out;
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export function newId(): string {

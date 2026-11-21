@@ -13,7 +13,7 @@ import { deleteUser, resetUserPassword, setUserRole, setUserStatus } from "./act
 export type UserItem = {
   id: string; name: string; email: string; phone: string | null; role: "SUPER_ADMIN" | "ADMIN" | "USER";
   status: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED"; note: string | null; orgName: string | null;
-  createdAt: string; lastLoginAt: string | null;
+  createdAt: string; lastLoginAt: string | null; resetRequestedAt: string | null;
 };
 
 const STATUS_LABEL = { PENDING: "រង់ចាំអនុម័ត", APPROVED: "បានអនុម័ត", REJECTED: "បានបដិសេធ", SUSPENDED: "ផ្អាក" } as const;
@@ -77,6 +77,7 @@ export function UsersTable({ users, meId, meRole }: { users: UserItem[]; meId: s
                       {u.name}
                       <Badge variant={u.status === "APPROVED" ? "default" : "secondary"}>{STATUS_LABEL[u.status]}</Badge>
                       {u.role !== "USER" && <Badge variant="outline"><ShieldCheck className="size-3" /> {ROLE_LABEL[u.role]}</Badge>}
+                      {u.resetRequestedAt && <Badge variant="outline" className="border-destructive text-destructive" data-testid="reset-flag"><KeyRound className="size-3" /> ស្នើប្តូរលេខសម្ងាត់</Badge>}
                       {isMe && <span className="text-xs text-muted-foreground">(អ្នក)</span>}
                     </p>
                     <p className="text-sm text-muted-foreground">{u.email}{u.phone ? ` · ${u.phone}` : ""}{u.orgName ? ` · ${u.orgName}` : ""}</p>

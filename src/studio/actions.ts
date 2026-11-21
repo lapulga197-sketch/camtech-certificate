@@ -1,11 +1,12 @@
 "use server";
 
-import QRCode from "qrcode";
 import { currentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/users";
 import { newId, query, queryOne } from "@/lib/db";
 import { parseRecipientWorkbook } from "@/lib/certificate-sheet";
 import { DOC_TYPES } from "@/lib/doc-types";
+import { allow } from "@/lib/security";
+import { logActivity, type Action } from "@/lib/activity";
 import type { DocType, Recipient } from "@/lib/certificate-design";
 
 async function guard() {
@@ -21,7 +22,9 @@ const DOCS = new Set(Object.keys(DOC_TYPES));
 export async function parseRecipientSheet(
   formData: FormData
 ): Promise<{ success: boolean; message?: string; rows?: Omit<Recipient, "id">[] }> {
-  if (!(await guard())) return { success: false, message: "គ្មានសិទ្ធិ" };
+  const me = await guard();
+  if (!me) return { success: false, message: "គ្មានសិទ្ធិ" };
+  if (!(await allow(`xl:${me.id}`, 30, 600))) return { success: false, message: "នាំចូលច្រើនដងពេក — សូមរង់ចាំបន្តិច" };
   const file = formData.get("file");
   const doc = String(formData.get("doc") ?? "certificate") as DocType;
   if (!DOCS.has(doc)) return { success: false, message: "ប្រភេទឯកសារមិនត្រឹមត្រូវ" };
@@ -30,7 +33,8 @@ export async function parseRecipientSheet(
   try {
     const rows = await parseRecipientWorkbook(Buffer.from(await file.arrayBuffer()), file.name, doc);
     if (rows.length === 0) return { success: false, message: "រកមិនឃើញឈ្មោះក្នុងឯកសារទេ" };
-    return { success: true, rows };
+    await logActivity("excel_import", { userId: me.id, email: me.email, doc, amount: rows.length });
+    return { success: true, rows: rows.slice(0, 2000) };
   } catch {
     return { success: false, message: "មិនអាចអានឯកសារបានទេ — សូមប្រើ .xlsx ឬ .csv" };
   }
@@ -41,44 +45,47 @@ export async function parseRecipientSheet(
 // ---------------------------------------------------------------------------
 
 export type RegisterItem = { key: string; name: string; detail?: string; date: string };
-export type RegisterResult = { key: string; certNo: string; qr: string };
-
-async function nextNo(prefix: string): Promise<string> {
-  const year = new Date(Date.now() + 7 * 3600_000).getUTCFullYear();
-  const id = `${prefix}-${year}`;
-  const row = await queryOne<{ value: number }>(
-    "INSERT INTO doc_counter (id, value) VALUES ($1, 1) ON CONFLICT (id) DO UPDATE SET value = doc_counter.value + 1 RETURNING value",
-    [id]
-  );
-  return `${prefix}-${year}-${String(row?.value ?? 1).padStart(4, "0")}`;
-}
+export type RegisterResult = { key: string; certNo: string };
 
 export async function registerDocuments(
   doc: DocType,
   items: RegisterItem[],
   origin: string
-): Promise<{ success: boolean; message?: string; results?: RegisterResult[] }> {
+): Promise<{ success: boolean; message?: string; results?: RegisterResult[]; verifyBase?: string }> {
   const user = await guard();
   if (!user) return { success: false, message: "គ្មានសិទ្ធិ" };
   if (!DOCS.has(doc) || !DOC_TYPES[doc].register) return { success: false, message: "ប្រភេទឯកសារនេះមិនត្រូវការចុះបញ្ជីទេ" };
-  const list = items.slice(0, 200);
-  if (list.length === 0) return { success: true, results: [] };
-  const baseUrl = process.env.NEXTAUTH_URL || origin || "http://localhost:3000";
+  if (!(await allow(`rd:${user.id}`, 40, 600))) return { success: false, message: "ចុះបញ្ជីច្រើនដងពេក — សូមរង់ចាំបន្តិច" };
+  const valid = items.slice(0, 200).filter((it) => /^\d{4}-\d{2}-\d{2}$/.test(it.date) && String(it.name ?? "").trim());
+  if (valid.length === 0) return { success: true, results: [] };
+  const origin0 = /^https?:\/\/[^\s/]+$/.test(origin) ? origin : "";
+  const baseUrl = (process.env.NEXTAUTH_URL || origin0 || "http://localhost:3000").replace(/\/$/, "");
   const prefix = DOC_TYPES[doc].prefix;
 
   try {
-    const results: RegisterResult[] = [];
-    for (const it of list) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(it.date) || !it.name.trim()) continue;
-      const certNo = await nextNo(prefix);
-      await query(
-        "INSERT INTO issued_doc (id, doc_no, doc_type, owner_id, recipient_name, detail, org_name, issued_date) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-        [newId(), certNo, doc, user.id, it.name.trim().slice(0, 200), (it.detail ?? "").slice(0, 300) || null, user.org_name, it.date]
-      );
-      const qr = await QRCode.toDataURL(`${baseUrl.replace(/\/$/, "")}/verify/${certNo}`, { width: 300, margin: 1 });
-      results.push({ key: it.key, certNo, qr });
-    }
-    return { success: true, results };
+    // One counter bump reserves the whole range of numbers, one INSERT stores them all —
+    // so many users registering at once only cost a handful of queries each.
+    const year = new Date(Date.now() + 7 * 3600_000).getUTCFullYear();
+    const row = await queryOne<{ value: number }>(
+      "INSERT INTO doc_counter (id, value) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET value = doc_counter.value + $2 RETURNING value",
+      [`${prefix}-${year}`, valid.length]
+    );
+    const start = (row?.value ?? valid.length) - valid.length + 1;
+    const nos = valid.map((_, i) => `${prefix}-${year}-${String(start + i).padStart(4, "0")}`);
+    await query(
+      `INSERT INTO issued_doc (id, doc_no, doc_type, owner_id, recipient_name, detail, org_name, issued_date)
+       SELECT t.id, t.no, $1, $2, t.name, NULLIF(t.detail, ''), $3, t.dt::date
+       FROM unnest($4::text[], $5::text[], $6::text[], $7::text[], $8::text[]) AS t(id, no, name, detail, dt)`,
+      [
+        doc, user.id, user.org_name,
+        valid.map(() => newId()), nos,
+        valid.map((it) => it.name.trim().slice(0, 200)), valid.map((it) => (it.detail ?? "").slice(0, 300)), valid.map((it) => it.date),
+      ]
+    );
+    // QR images are drawn in the user's browser — the server only reserves numbers (fast, even with many users).
+    const results: RegisterResult[] = valid.map((it, i) => ({ key: it.key, certNo: nos[i] }));
+    await logActivity("register_docs", { userId: user.id, email: user.email, doc, amount: valid.length });
+    return { success: true, results, verifyBase: baseUrl };
   } catch (e) {
     console.error("register failed", e);
     return { success: false, message: "មិនអាចចុះបញ្ជីបានទេ" };
@@ -89,7 +96,7 @@ export async function registerDocuments(
 // Saved designs (templates)
 // ---------------------------------------------------------------------------
 
-const MAX_CONFIG = 3_500_000;
+const MAX_CONFIG = 3_000_000;
 
 export type TemplateRow = { id: string; name: string; updatedAt: string; shared: boolean; own: boolean };
 
@@ -135,6 +142,7 @@ export async function saveTemplate(
         [newId(), user.id, doc, title, config]
       );
     }
+    await logActivity("template_save", { userId: user.id, email: user.email, doc });
     return { success: true, template: toRow(row!, user.id) };
   } catch (e) {
     console.error("save template failed", e);
@@ -175,4 +183,38 @@ export async function setTemplateShared(id: string, shared: boolean): Promise<{ 
   } catch {
     return { success: false, message: "មានបញ្ហាកើតឡើង" };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Frames (uploaded by an admin, chosen by users)
+// ---------------------------------------------------------------------------
+
+export type FrameRow = { id: string; title: string };
+
+export async function listFrames(doc: DocType, orientation: "landscape" | "portrait"): Promise<FrameRow[]> {
+  if (!(await guard()) || !DOCS.has(doc)) return [];
+  const rows = await query<{ id: string; meta: string | null }>("SELECT id, meta FROM asset WHERE kind = 'frame' ORDER BY sort_order, created_at LIMIT 300");
+  const out: FrameRow[] = [];
+  for (const r of rows) {
+    let m: { title?: string; docs?: string[]; orientation?: string } = {};
+    try { m = JSON.parse(r.meta || "{}"); } catch { /* ignore */ }
+    const docs = m.docs ?? [];
+    if (docs.length > 0 && !docs.includes(doc)) continue;
+    if (m.orientation && m.orientation !== "both" && m.orientation !== orientation) continue;
+    out.push({ id: r.id, title: m.title || "ស៊ុម" });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Usage tracking for downloads / printing done in the browser
+// ---------------------------------------------------------------------------
+
+const TRACKED = new Set<Action>(["export_png", "export_zip", "export_pdf", "export_sheet", "print"]);
+
+export async function trackUse(action: Action, doc: DocType, amount: number): Promise<void> {
+  const user = await guard();
+  if (!user || !TRACKED.has(action) || !DOCS.has(doc)) return;
+  if (!(await allow(`tr:${user.id}`, 240, 600))) return;
+  await logActivity(action, { userId: user.id, email: user.email, doc, amount: Math.max(1, Math.min(Math.floor(Number(amount) || 1), 5000)) });
 }
